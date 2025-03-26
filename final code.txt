@@ -1,0 +1,812 @@
+.data
+buffer:         .space 500        # Buffer to store the file contents (128 bytes)
+file_name:      .space 129        # Buffer for the filename (extra space for null terminator)
+prompt_msg:     .asciiz "Enter the filename: "
+open_msg:       .asciiz "Opening file...\n"
+open_fail:      .asciiz "Failed to open the file.\n"
+open_success:   .asciiz "File opened successfully.\n"
+read_msg:       .asciiz "Reading from file...\n"
+read_success:   .asciiz "Successfully read from file.\n"
+read_fail:      .asciiz "Failed to read from the file or end of file.\n"
+close_msg:      .asciiz "Closing file...\n"
+null_char:      .byte 0           # Null terminator for the filename
+menu_prompt: .asciiz "\nChoose an option:\n1. Load input file\n2. Display results on screen\n3. Save results to file\nE. Exit\n> "
+invalid_input: .asciiz "\nInvalid input. Please try again.\n"
+current_equation: .space 128 
+blank_line: .asciiz "\n"
+no_equation_msg: .asciiz "\nfinsh loading equations\n"
+f: .asciiz "finsh print .....................\n"
+one: .asciiz "finsh print .....................\n"
+blank_message:      .asciiz "Blank Line\n"  
+coefficients:    .space 12                     # Space for 3 coefficients (4 bytes each for x, y, z)  
+newline:         .asciiz "\n"  
+sys: .asciiz "im blank line"
+num: .byte 0 
+result_D: .asciiz "Determinant D: "
+result_DX: .asciiz "\nDeterminant DX: "
+result_DY: .asciiz "\nDeterminant DY: "
+result_DZ: .asciiz "\nDeterminant DZ: "
+s: .byte 5
+imhere:  .asciiz "\nim here \n"
+
+array_2D:    .byte  0, 0, 0, 0      # First row
+             .byte  0, 0, 0, 0     # Second row
+             .byte  0, 0, 0, 0    # Third row
+
+
+
+
+
+
+
+
+
+
+.text
+.globl main
+
+main:
+
+    li $v0, 4                  # Syscall code for printing a string
+    la $a0, menu_prompt        # Load address of the menu prompt
+    syscall
+
+    # Get user input
+    li $v0, 12                 # Syscall code for reading a single character
+    syscall
+    move $t0, $v0              # Store input in $t0
+
+    # Check if input is '1' for loading the file
+    li $t1, '1'                # ASCII code for '1'
+    beq $t0, $t1, load_file
+
+    # Check if input is '2' for displaying results
+    li $t1, '2'                # ASCII code for '2'
+    beq $t0, $t1, display_results
+
+    # Check if input is '3' for saving results
+    li $t1, '3'                # ASCII code for '3'
+    beq $t0, $t1, save_results
+
+    # Check if input is 'E' or 'e' to exit
+    li $t1, 'E'
+    beq $t0, $t1, exit_program
+    li $t1, 'e'
+    beq $t0, $t1, exit_program
+
+    # If input is invalid, show error and loop back to menu
+    li $v0, 4                  # Syscall code for printing a string
+    la $a0, invalid_input      # Load address of the invalid input message
+    syscall
+    j main                     # Jump back to main to re-display the menu
+
+
+load_file:
+  
+    la $t5,array_2D
+    
+    li $v0, 4                      # Syscall number for print string
+    la $a0, prompt_msg             # Load the address of "Enter the filename:"
+    syscall
+
+    # Read the filename from user (syscall 8)
+    li $v0, 8                      # Syscall number for read string
+    la $a0, file_name              # Address to store the filename
+    li $a1, 128                    # Maximum number of characters to read
+    syscall
+
+    # Manually add null terminator to the end of the filename
+    
+    la $a0, file_name              # Load file_name address into $a0
+    li $t0, 0                      # Index counter
+terminate_filename:
+    lb $t1, 0($a0)                 # Load byte from file_name
+    beq $t1, 10, add_null          # If newline (ASCII 10), add null terminator
+    beq $t1, 0, done_terminating   # If null, we're done
+    addi $a0, $a0, 1               # Move to next byte
+    j terminate_filename           # Repeat
+add_null:
+    sb $zero, 0($a0)               # Add null terminator (ASCII 0)
+done_terminating:
+
+    # Debug: Print "Opening file..."
+    li $v0, 4                      # Syscall number for print string
+    la $a0, open_msg               # Load the address of "Opening file..."
+    syscall
+
+    # Open the file (syscall 13)
+    li $v0, 13                     # Syscall number for open
+    la $a0, file_name              # Load the address of the user-provided filename
+    li $a1, 0                      # Open for reading (flag: 0 = read-only)
+    li $a2, 0                      # Mode (unused for reading)
+    syscall
+
+    move $s0, $v0                  # Save the file descriptor in $s0
+
+    # Check if the file was opened successfully
+   # bltz $s0, open_error            # If $v0 < 0, jump to open_error
+
+    # Debug: Print "File opened successfully."
+    li $v0, 4
+    la $a0, open_success
+    syscall
+
+    # Read the file (syscall 14)
+read_file:
+    li $v0, 4
+    la $a0, read_msg
+    syscall
+
+    li $v0, 14                     # Syscall number for read
+    move $a0, $s0                  # File descriptor
+    la $a1, buffer                 # Load the address of the buffer
+    li $a2, 500                    # Maximum number of bytes to read
+    syscall
+    li $v0, 4
+    la $a0, f
+    syscall
+
+  
+    li $v0, 4
+    la $a0, read_success
+    syscall
+
+    # Print the content to the console
+    li $v0, 4                      # Syscall number for print string
+    la $a0, buffer                 # Load the address of the buffer
+    syscall
+    
+
+   
+    
+##########################################################################################################################
+
+parse_equations:
+    la $t7, buffer               # Load the buffer address into $a0
+    li $t0, 0   
+    
+next_line:
+    
+    # num of lines
+    la $v0,num
+    lb $a0,0($v0)
+    li $s3,3
+    beq $s3,$a0,calculate 
+   # n:
+    addi $a0,$a0,1
+    sb  $a0,0($v0) 	
+    
+     
+    
+      li $t1, 0                     # Character count for the current equation
+      la $t2, current_equation      # Pointer to store the current equation
+    
+read_equation:
+    
+   
+      lb $t3, 0($t7)               # Load a byte from the buffer
+      beqz $t3, end_buffer 
+      li $t4, 10       
+      beq $t3, $t4, process_equation
+      
+    sb $t3, 0($t2)                # Store the character in current_equation
+    addi $t2, $t2, 1              # Move to the next character in current_equation
+    addi $t1, $t1, 1              # Increment character count
+    addi $t7, $t7, 1              # Move to the next byte in buffer
+    
+    
+    j read_equation   
+  
+process_equation:
+########################### print each equation alone to make sure i cut the equations currectly 
+     li $v0, 4            
+     la $a0, current_equation        
+     syscall 
+    
+     li $v0, 4            
+     la $a0, blank_line
+    syscall 
+    addi $t7, $t7, 1 
+############################################################# take coefficient of x,y,z   
+    la $s0, current_equation  # Load address of the equation buffer  
+    la $s1, coefficients       # Load address to store coefficients  
+    li $s2, 0                  # Coefficient for x  
+    li $s3, 0                  # Coefficient for y  
+    li $s4, 0                  # Coefficient for z  
+    li $s6, 0                  # Constant term (after =)  
+    li $s5, 1                  # Current sign (1 for positive, -1 for negative)  
+
+check_term:  
+    lb $t0, 0($s0)            # Load the current character  
+    beqz $t0, store_coeffs     # If end of equation, store coefficients  
+
+    # Handle spaces and '+'/'-' signs  
+    beq $t0, ' ', skip_char    # Skip spaces  
+    beq $t0, '+', set_plus     # Set positive sign  
+    beq $t0, '-', set_minus    # Set negative sign  
+    beq $t0, '=', read_constant # If '=', move to read constant term  
+
+    # Check if the character is a digit  
+    li $t1, '0'                # ASCII for '0'  
+    li $t2, '9'                # ASCII for '9'  
+    blt $t0, $t1, skip_char    # Skip if less than '0'  
+    bgt $t0, $t2, check_var    # If greater than '9', check for variable  
+
+    # Extract the coefficient  
+    li $t3, 0                  # Temporary register for number  
+
+extract_digit:  
+    sub $t0, $t0, '0'          # Convert ASCII to integer  
+    mul $t3, $t3, 10           # Multiply by 10  
+    add $t3, $t3, $t0          # Add new digit  
+    addi $s0, $s0, 1           # Move to next character  
+    lb $t0, 0($s0)             # Load the next character  
+    blt $t0, $t1, extract_digit # Continue if digit  
+
+    j check_var                # Jump to variable check  
+
+read_constant:
+    addi $s0, $s0, 1           # Move to character after '='
+    lb $t0, 0($s0)             # Load the next character
+
+    # Skip any spaces after '='
+skip_spaces:
+    beq $t0, ' ', skip_space_move
+    j continue_read
+
+skip_space_move:
+    addi $s0, $s0, 1           # Move past space
+    lb $t0, 0($s0)             # Load next character
+    beq $t0, ' ', skip_space_move  # Skip consecutive spaces
+
+continue_read:
+    li $t3, 0                  # Clear $t3 to build constant term
+
+read_constant_digit:
+    # Continue as before to read digits for the constant term
+    li $t1, '0'
+    li $t2, '9'
+    blt $t0, $t1, finish_constant   # Stop if no more digits
+    bgt $t0, $t2, finish_constant   # Stop if no more digits
+
+    # Convert ASCII to integer
+    sub $t0, $t0, '0'
+    mul $t3, $t3, 10
+    add $t3, $t3, $t0
+    addi $s0, $s0, 1           # Move to next character
+    lb $t0, 0($s0)             # Load the next character
+    j read_constant_digit
+
+finish_constant:
+    mul $s6, $t3, $s5          # Apply the sign to the constant term
+    j check_term               # Return to term check
+
+check_var:  
+    beq $t0, 'x', store_x      # If 'x', store x coefficient  
+    beq $t0, 'y', store_y      # If 'y', store y coefficient  
+    beq $t0, 'z', store_z      # If 'z', store z coefficient  
+    j skip_char                # Skip if not a variable  
+
+set_plus:  
+    li $s5, 1                  # Set positive sign  
+    addi $s0, $s0, 1           # Move to next character  
+    j check_term               # Return to term check  
+
+set_minus:  
+    li $s5, -1                 # Set negative sign  
+    addi $s0, $s0, 1           # Move to next character  
+    j check_term               # Return to term check  
+
+store_x:  
+    mul $t3, $t3, $s5          # Apply sign to x coefficient  
+    add $s2, $s2, $t3          # Accumulate x coefficient  
+    j skip_char  
+
+store_y:  
+    mul $t3, $t3, $s5          # Apply sign to y coefficient  
+    add $s3, $s3, $t3          # Accumulate y coefficient  
+    j skip_char  
+
+store_z:  
+    mul $t3, $t3, $s5          # Apply sign to z coefficient  
+    add $s4, $s4, $t3          # Accumulate z coefficient  
+    j skip_char  
+
+skip_char:  
+    addi $s0, $s0, 1           # Move to the next character  
+    j check_term               # Continue checking  
+
+store_coeffs:  
+  
+  
+      la $a0,s
+      beqz $s6, system2
+      li $v0,1
+      sb $v0,0($a0)
+      sys2:
+   
+     la $a0,array_2D 
+    addi $a0,$a0,12
+    bne  $a0,$t5 ,lable1
+    beq $a0,$t5 , lable2
+    
+    
+    
+     lable2:
+     la $t5,array_2D
+     li $a0,0
+     li $k0,12
+     go:
+     sb $a0, 0($t5)   
+     addi $t5,$t5,1  
+     subi $k0,$k0,1
+     bnez $k0 go      
+     la $t5,array_2D
+     
+   
+    lable1:
+    sb $s2, 0($t5)   
+     addi $t5,$t5,1          
+    sb $s3, 0($t5) 
+     addi $t5,$t5,1           
+     sb $s4, 0($t5) 
+     addi $t5,$t5,1            
+    sb $s6, 0($t5) 
+     addi $t5,$t5,1    
+    
+    
+    
+    
+      
+    
+    
+     
+    
+    # Reset coefficients for the next equation
+    li $s2, 0
+    li $s3, 0
+    li $s4, 0
+    li $s6, 0
+    li $s5, 1                  # Reset sign to positive  
+
+   
+    # Print coefficient for x
+     
+     la $t8,array_2D
+     li $v0, 1 
+     lb $a0, 0($t8)            
+     syscall
+    
+    
+     addi $t8,$t8,1
+     li $v0, 1 
+     lb $a0, 0($t8)            
+     syscall
+     
+      addi $t8,$t8,1
+      li $v0, 1 
+      lb $a0, 0($t8)            
+      syscall
+
+   
+     addi $t8,$t8,1
+     li $v0, 1 
+     lb $a0, 0($t8)            
+     syscall
+
+
+   
+    la $a0, newline           
+    li $v0, 4                  
+    syscall
+
+
+     addi $t8,$t8,1
+     li $v0, 1 
+     lb $a0, 0($t8)            
+    syscall
+    
+    
+    
+    addi $t8,$t8,1
+     li $v0, 1 
+     lb $a0, 0($t8)            
+    syscall
+     
+     
+  
+      addi $t8,$t8,1
+     li $v0, 1 
+     lb $a0, 0($t8)            
+    syscall
+
+  
+    
+     addi $t8,$t8,1
+     li $v0, 1 
+     lb $a0, 0($t8)            
+    syscall
+
+    la $a0, newline           
+    li $v0, 4                  
+    syscall
+
+      addi $t8,$t8,1
+      li $v0, 1 
+     lb $a0, 0($t8)            
+    syscall
+    
+    
+    addi $t8,$t8,1
+     li $v0, 1 
+     lb $a0, 0($t8)            
+    syscall
+     
+     
+  
+      addi $t8,$t8,1
+     li $v0, 1 
+     lb $a0, 0($t8)            
+    syscall
+
+   
+    
+     addi $t8,$t8,1
+     li $v0, 1 
+     lb $a0, 0($t8)            
+    syscall
+
+
+    # Print a newline
+    la $a0, newline           
+    li $v0, 4                  
+    syscall
+
+
+
+   
+  
+#############################################################                     
+
+ 
+   
+    
+     
+       
+
+############################################################# to make sure we cleared the buffer     
+clear_buffer:
+    la $t9, current_equation   # Load the address of current_equation into $t0
+    li $t1, 128                # Set the counter for the buffer size
+
+clear_loop:
+    sb $zero, 0($t9)           # Store 0 (null character) at the current position
+    addi $t9, $t9, 1           # Move to the next byte in the buffer
+    subi $t1, $t1, 1           # Decrement the counter
+    bgtz $t1, clear_loop       # Continue until the counter reaches 0
+    j next_line                   
+ 
+end_buffer:  
+ 
+   
+    li $v0, 4            
+    la $a0, no_equation_msg         
+    syscall 
+   
+    j main            
+
+##############################################################################################################################################
+calculate:
+    
+    
+  
+    la $a0,s
+    lb $v1,0($a0)
+    beqz $v1 , creamer_sys2
+    
+    li $t9, 0          # a3 = 7
+    li $s2, 0          # b3 = 8
+    li $a1, 0         # c3 = 6
+    li $a2, 0         # d3 = 8
+    
+  
+    la $t0, array_2D        
+    lb $t1, 0($t0)          # a1 = 1
+    lb $t2, 1($t0)          # b1 = 2
+    lb $t3, 2($t0)          # c1 = 3
+    lb $t4, 3($t0)          # d1 = 8
+
+    lb $s4, 4($t0)          # a2 = 2
+    lb $t6, 5($t0)          # b2 = 5
+    lb $s3, 6($t0)          # c2 = 6
+    lb $t8, 7($t0)          # d2 = 8
+
+    lb $t9, 8($t0)          # a3 = 7
+    lb $s2, 9($t0)          # b3 = 8
+    lb $a1, 10($t0)         # c3 = 6
+    lb $a2, 11($t0)         # d3 = 8
+
+    
+    
+    
+    
+    
+    # Calculate D
+    mul $t4, $t6, $a1       # b2*c3
+    mul $t8, $s3, $s2       # c2*b3
+    sub $t4, $t4, $t8      # (b2*c3 - c2*b3)
+    mul $t4, $t1, $t4     # a1 * (b2*c3 - c2*b3)
+
+    
+    mul $t8, $s4, $a1       # a2*c3
+    mul $v0, $s3, $t9       # c2*a3
+    sub $t8, $t8, $v0      # (a2*c3 - c2*a3)
+    mul $t8, $t2, $t8      # b1 * (a2*c3 - c2*a3)
+    sub $t4, $t4, $t8       # D part 2 subtraction
+      
+    mul $t8, $s4, $s2      # a2*b3
+    mul $v0, $t6, $t9       # b2*a3
+    sub $t8, $t8, $v0      # (a2*b3 - b2*a3)
+    mul $t8, $t3, $t8      # c1 * (a2*b3 - b2*a3)
+    add $t4, $t4, $t8       # Finalize D
+
+    # Print D
+    li $v0, 4               # syscall for print string
+    la $a0, result_D
+    syscall
+
+    move $a0, $t4        # Move D to $a0 for printing
+    li $v0, 1               # syscall for print integer
+    syscall
+    
+    
+    
+
+    # Calculate DX
+    
+      lb $t4, 3($t0)          # d1 = 8
+      lb $t8, 7($t0)          # d2 = 8
+      lb $a2, 11($t0)         # d3 = 8
+      
+      li $s4,0
+      li $t1,0
+      
+     
+     
+    mul $t1, $t6, $a1       # b2*c3
+    mul $s4, $s3, $s2       # c2*b3
+      
+     
+    
+    sub $t1, $t1, $s4       # (b2*c3 - c2*d3)
+    mul $t1, $t4, $t1      # d1 * (b2*c3 - c2*d3)
+    
+    
+   
+    
+    mul $s4, $t4, $a1       # d2*c3
+    mul $v0, $s3, $a2       # c2*d3
+    sub $s4, $s4, $v0      # (d2*c3 - c2*d3)
+    mul $s4, $t2, $s4       # -b1 * (d2*c3 - c2*d3)
+    sub $t1, $t1, $s4       # DX part 2 subtraction
+    
+ 
+    
+    mul $s4, $t8, $s2       # d2*b3
+    mul $v0, $t6, $a2      # b2*d3
+    sub $s4, $s4, $v0      # (d2*b3 - b2*d3)
+    mul $s4, $t3, $s4       # c1 * (d2*b3 - b2*d3)
+    add $t1, $t1, $s4       # Finalize DX
+    
+         
+    # Print DX
+    li $v0, 4               # syscall for print string
+    la $a0, result_DX
+    syscall
+    
+      move $a0, $t1           # Move DZ to $a0 for printing
+    li $v0, 1               # syscall for print integer
+    syscall
+  
+
+    # Calculate DY
+    
+      lb $t1, 0($t0)          # a1 = 1
+      lb $s4, 4($t0)          # a2 = 2
+      lb $t9, 8($t0)          # a3 = 7
+      
+    mul $t2, $t8, $a1       # d2*c3
+    mul $t6, $s3, $a2       # c2*d3
+    sub $t2, $t2, $t6       # (d2*c3 - c2*d3)
+    mul $t2, $t1, $t2       # a1 * (d2*c3 - c2*d3)
+    
+    mul $t6, $s4, $a1       # a2*c3
+    mul $v0, $s3, $t9       # c2*a3
+    sub $t6, $t6, $v0       # (a2*c3 - c2*a3)
+    mul $t6, $t4, $t6       # d1 * (a2*c3 - c2*a3)
+    sub $t2, $t2, $t6       # DY part 2 subtraction
+   
+    
+    mul $t6, $s4, $a2       # a2*d3
+    mul $v0, $t8, $t9       # d2*a3
+    sub $t6, $t6, $v0       # (a2*d3 - d2*a3)
+    mul $t6, $t3, $t6       # c1 * (a2*d3 - d2*a3) 
+    add $t2, $t2, $t6      # Finalize DY
+
+    # Print DY
+    li $v0, 4               # syscall for print string
+    la $a0, result_DY
+    syscall
+    
+    move $a0, $t2          # Move DY to $a0 for printing
+    li $v0, 1               # syscall for print integer
+    syscall
+
+  
+    # Calculate DZ
+    
+    lb $t2, 1($t0)          # b1 = 2
+    lb $t6, 5($t0)          # b2 = 5
+    lb $s2, 9($t0)          # b3 = 8
+    
+    mul $t3, $t6, $a2       # b2*d3
+    mul $s3, $t8, $s2       # d2*b3
+    sub $t3, $t3, $s3       # (b2*d3 - d2*b3)
+    mul $t3, $t1, $t3       # a1 * (b2*d3 - d2*b3)
+
+   
+    
+    mul $s3, $s4, $a2       # a2*d3
+    mul $v0, $t8, $t9       # d2*a3
+    sub $s3, $s3, $v0       # (a2*d3 - d2*a3)
+    mul $s3, $t2, $s3       # b1* (a2*d3 - d2*a3)
+    sub $t3, $t3, $s3       # DZ part 2 subtraction
+
+    mul $s3, $s4, $s2       # a2*b3
+    mul $v0, $t6, $t9       # b2*a3
+    sub $s3, $s3, $v0       # (a2*b3 - b2*a3)
+    mul $s3, $t4, $s3       # d1* (a2*b3 - b2*a3)
+    add $t3, $t3, $s3       # Finalize DZ
+
+    # Print DZ
+    li $v0, 4               # syscall for print string
+    la $a0, result_DZ
+    syscall
+
+    move $a0, $t3           # Move DZ to $a0 for printing
+    li $v0, 1               # syscall for print integer
+    syscall
+    
+    j go_sys2
+#######################################################################################################################3sys2
+    creamer_sys2:
+    li $t9, 0          # a3 = 7
+    li $s2, 0          # b3 = 8
+    li $a1, 0         # c3 = 6
+    li $a2, 0         # d3 = 8
+    
+  
+    la $t0, array_2D        
+    lb $t1, 0($t0)          # a1 = 1
+    lb $t2, 1($t0)          # b1 = 2
+   # lb $t3, 2($t0)          # c1 = 3
+    lb $t4, 3($t0)          # d1 = 8
+
+    lb $s4, 4($t0)          # a2 = 2
+    lb $t6, 5($t0)          # b2 = 5
+   # lb $s3, 6($t0)          # c2 = 6
+    lb $t8, 7($t0)          # d2 = 8
+
+    lb $t9, 8($t0)          # a3 = 7
+    lb $s2, 9($t0)          # b3 = 8
+   # lb $a1, 10($t0)         # c3 = 6
+    lb $a2, 11($t0)         # d3 = 8
+
+
+    # Calculate D
+    mul $t3, $t6, $t1      # b2*a1
+    mul $s3, $s4, $t2      # b1*a2
+    sub $t3, $t3, $s3      # (b2*c3 - c2*b3)
+   
+   
+    # Print D
+    li $v0, 4               # syscall for print string
+    la $a0, result_D
+    syscall
+
+    move $a0, $t3        # Move D to $a0 for printing
+    li $v0, 1               # syscall for print integer
+    syscall
+    
+   
+    # Calculate DX
+    mul $t3, $t6, $t4       # b2*d1
+    mul $s3, $t2, $t8       # b1*d2
+    sub $t3, $t3, $s3      # (b2*c3 - c2*b3)  
+     
+    # Print DX
+    li $v0, 4               # syscall for print string
+    la $a0, result_DX
+    syscall
+    
+      move $a0, $t3           # Move DZ to $a0 for printing
+    li $v0, 1               # syscall for print integer
+    syscall
+  
+
+    # Calculate DY
+     mul $t3, $t1, $t8       # a1*d2
+     mul $s3, $s4, $t4       # a2*d1
+     sub $t3, $t3, $s3      # (b2*c3 - c2*b3)  
+     
+    # Print DY
+    li $v0, 4               # syscall for print string
+    la $a0, result_DY
+    syscall
+    
+    move $a0, $t3          # Move DY to $a0 for printing
+    li $v0, 1               # syscall for print integer
+    syscall
+
+  
+    # Calculate DZ
+    
+ 
+    
+    ####################################################################################################################sys2
+    
+    
+    
+    go_sys2:
+    li $t1, 0          # a1 = 1
+    li $t2, 0         # b1 = 2
+    li $t3, 0         # c1 = 3
+    li $t4, 0         # d1 = 8
+    li $s4, 0          # a2 = 2
+    li $t6, 0          # b2 = 5
+    li $s3, 0          # c2 = 6
+    li $t8, 0          # d2 = 8
+    li $t9, 0          # a3 = 7
+    li $s2, 0          # b3 = 8
+    li $a1, 0         # c3 = 6
+    li $a2, 0         # d3 = 8
+    
+    li $v0 ,4
+    la $a0 , newline
+    syscall 
+    
+    la $v0,num
+    lb $a0,0($v0)
+    subi $a0,$a0,3
+    sb $a0,0($v0)
+   
+
+    j next_line
+    
+  
+###################################################################################################calculat
+
+
+# Display results label
+display_results:
+    # Here we would display the results (to be implemented)
+    j main
+
+# Save results label
+save_results:
+    # Here we would save the results to a file (to be implemented)
+    j main
+
+# Exit label
+exit_program:
+    li $v0, 10                 # Syscall code for exiting the program
+    syscall
+
+
+
+system2:
+la $a0,s
+li $v0,0
+sb $v0,0($a0)
+j sys2 
+
